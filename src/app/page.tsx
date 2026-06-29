@@ -157,7 +157,7 @@ export default function Dashboard() {
                 <BarChart data={chartData} margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Tooltip formatter={(value) => formatCurrency(value as number)} />
                   <Legend />
                   <Bar dataKey="Entradas" fill="#22c55e" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Saídas" fill="#f97316" radius={[4, 4, 0, 0]} />

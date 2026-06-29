@@ -250,12 +250,12 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
             <CardBody>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
-                  <Pie data={categoriaData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}>
+                  <Pie data={categoriaData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}>
                     {categoriaData.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                  <Tooltip formatter={(v) => formatCurrency(v as number)} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
