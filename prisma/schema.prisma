@@ -21,9 +21,11 @@ model Obra {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  lancamentos    Lancamento[]
-  pagamentos     Pagamento[]
+  lancamentos      Lancamento[]
+  pagamentos       Pagamento[]
   funcionariosObra FuncionarioObra[]
+  solicitacoes     SolicitacaoAdiantamento[]
+  fotos            FotoRecibo[]
 }
 
 model Funcionario {
@@ -40,16 +42,17 @@ model Funcionario {
 
   pagamentos       Pagamento[]
   funcionariosObra FuncionarioObra[]
+  solicitacoes     SolicitacaoAdiantamento[]
 }
 
 model FuncionarioObra {
-  id            String      @id @default(cuid())
+  id            String    @id @default(cuid())
   funcionarioId String
   obraId        String
   dataInicio    DateTime
   dataFim       DateTime?
   funcao        String?
-  createdAt     DateTime    @default(now())
+  createdAt     DateTime  @default(now())
 
   funcionario Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
   obra        Obra        @relation(fields: [obraId], references: [id], onDelete: Cascade)
@@ -84,4 +87,78 @@ model Pagamento {
 
   funcionario Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
   obra        Obra        @relation(fields: [obraId], references: [id], onDelete: Cascade)
+}
+
+// ─── Auth & Usuários ──────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  name         String
+  passwordHash String
+  status       String   @default("ativo")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  grupos                 UserGrupo[]
+  solicitacoesCriadas    SolicitacaoAdiantamento[] @relation("SolicitacaoCriador")
+  solicitacoesAprovadas  SolicitacaoAdiantamento[] @relation("SolicitacaoAprovador")
+  fotos                  FotoRecibo[]
+}
+
+model Grupo {
+  id        String   @id @default(cuid())
+  nome      String   @unique
+  createdAt DateTime @default(now())
+
+  usuarios UserGrupo[]
+}
+
+model UserGrupo {
+  userId  String
+  grupoId String
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grupo Grupo @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+
+  @@id([userId, grupoId])
+}
+
+// ─── Workflow Adiantamentos ───────────────────────────────────────────────────
+
+model SolicitacaoAdiantamento {
+  id              String    @id @default(cuid())
+  funcionarioId   String
+  obraId          String
+  valor           Float
+  motivo          String
+  status          String    @default("pendente")
+  valorAutorizado Float?
+  motivoResposta  String?
+  criadoPorId     String
+  aprovadoPorId   String?
+  criadoEm        DateTime  @default(now())
+  respondidoEm    DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  funcionario Funcionario @relation(fields: [funcionarioId], references: [id])
+  obra        Obra        @relation(fields: [obraId], references: [id])
+  criadoPor   User        @relation("SolicitacaoCriador", fields: [criadoPorId], references: [id])
+  aprovadoPor User?       @relation("SolicitacaoAprovador", fields: [aprovadoPorId], references: [id])
+}
+
+// ─── Fotos de Recibos ─────────────────────────────────────────────────────────
+
+model FotoRecibo {
+  id           String   @id @default(cuid())
+  userId       String
+  obraId       String?
+  imagemBase64 String?
+  textoOCR     String?
+  dadosEstruturados String?
+  status       String   @default("processando")
+  createdAt    DateTime @default(now())
+
+  user User  @relation(fields: [userId], references: [id])
+  obra Obra? @relation(fields: [obraId], references: [id])
 }
