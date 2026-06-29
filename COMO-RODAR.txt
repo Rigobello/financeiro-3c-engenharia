@@ -1,0 +1,42 @@
+====================================================
+SISTEMA FINANCEIRO - 3C ENGENHARIA
+====================================================
+
+COMO INICIAR O SISTEMA:
+------------------------
+1. Abra o Prompt de Comando (CMD) como Administrador
+2. Digite: cd C:\3C\financeiro
+3. Digite: npm start
+4. Abra o navegador em: http://localhost:3000
+
+ACESSO DE OUTROS COMPUTADORES NA REDE:
+----------------------------------------
+Para liberar acesso via rede, abra o CMD como Administrador e execute:
+  netsh advfirewall firewall add rule name="3C Financeiro" dir=in action=allow protocol=TCP localport=3000
+
+Outros computadores acessam via:
+  http://192.168.1.211:3000
+
+PARA INICIAR EM REDE (substitui "npm start"):
+----------------------------------------------
+  npm start -- -H 0.0.0.0
+
+GITHUB (código-fonte):
+------------------------
+  https://github.com/Rigobello/financeiro-3c-engenharia
+
+BANCO DE DADOS:
+------------------------
+  Localizado em: C:\3C\financeiro\prisma\dev.db
+  Faça backup deste arquivo regularmente!
+
+FUNCIONALIDADES:
+------------------------
+  / ................ Dashboard geral com gráficos
+  /obras ........... Cadastro e gestão de obras
+  /obras/[id] ..... Dashboard individual de cada obra
+  /funcionarios .... Cadastro de funcionários
+  /caixa ........... Lançamentos de entrada/saída
+  /pagamentos ...... Pagamentos a funcionários
+
+====================================================
