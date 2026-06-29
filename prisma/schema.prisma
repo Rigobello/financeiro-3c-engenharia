@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Obra {
+  id         String    @id @default(cuid())
+  nome       String
+  cliente    String
+  endereco   String?
+  cidade     String?
+  dataInicio DateTime
+  dataFim    DateTime?
+  status     String    @default("em_andamento")
+  orcamento  Float
+  descricao  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  lancamentos    Lancamento[]
+  pagamentos     Pagamento[]
+  funcionariosObra FuncionarioObra[]
+}
+
+model Funcionario {
+  id          String   @id @default(cuid())
+  nome        String
+  cpf         String?  @unique
+  cargo       String
+  salarioBase Float
+  status      String   @default("ativo")
+  telefone    String?
+  email       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pagamentos       Pagamento[]
+  funcionariosObra FuncionarioObra[]
+}
+
+model FuncionarioObra {
+  id            String      @id @default(cuid())
+  funcionarioId String
+  obraId        String
+  dataInicio    DateTime
+  dataFim       DateTime?
+  funcao        String?
+  createdAt     DateTime    @default(now())
+
+  funcionario Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+  obra        Obra        @relation(fields: [obraId], references: [id], onDelete: Cascade)
+
+  @@unique([funcionarioId, obraId])
+}
+
+model Lancamento {
+  id        String   @id @default(cuid())
+  obraId    String
+  tipo      String
+  valor     Float
+  descricao String
+  categoria String
+  data      DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  obra Obra @relation(fields: [obraId], references: [id], onDelete: Cascade)
+}
+
+model Pagamento {
+  id            String   @id @default(cuid())
+  funcionarioId String
+  obraId        String
+  valor         Float
+  tipo          String
+  data          DateTime
+  descricao     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  funcionario Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+  obra        Obra        @relation(fields: [obraId], references: [id], onDelete: Cascade)
+}
