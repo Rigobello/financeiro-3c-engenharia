@@ -11,6 +11,8 @@ async function main() {
     { nome: 'Administrador' },
     { nome: 'Engenheiro' },
     { nome: 'Usuário' },
+    { nome: 'Ponto' },
+    { nome: 'Almoxarifado' },
   ]
 
   for (const g of grupos) {

@@ -12,6 +12,8 @@ import {
   ChevronRight,
   Settings,
   ClipboardList,
+  Clock,
+  Package,
 } from 'lucide-react'
 import { UserMenu } from './UserMenu'
 
@@ -22,6 +24,8 @@ const navItems = [
   { href: '/caixa', label: 'Caixa', icon: Wallet },
   { href: '/pagamentos', label: 'Pagamentos', icon: CreditCard },
   { href: '/solicitacoes', label: 'Adiantamentos', icon: ClipboardList },
+  { href: '/ponto', label: 'Registro de Ponto', icon: Clock, grupos: ['Ponto', 'Administrador'] },
+  { href: '/materiais', label: 'Materiais', icon: Package, grupos: ['Almoxarifado', 'Administrador'] },
 ]
 
 const adminItems = [
@@ -35,6 +39,11 @@ interface SidebarProps {
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname()
   const isAdmin = user?.grupos.includes('Administrador') ?? false
+
+  const visibleNavItems = navItems.filter((item) => {
+    if (!item.grupos) return true
+    return item.grupos.some((g) => user?.grupos.includes(g))
+  })
 
   return (
     <aside className="fixed top-0 left-0 h-full w-60 bg-slate-900 text-white flex flex-col z-50">
@@ -51,7 +60,7 @@ export function Sidebar({ user }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {visibleNavItems.map(({ href, label, icon: Icon }) => {
           const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
           return (
             <Link

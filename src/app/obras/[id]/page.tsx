@@ -4,7 +4,7 @@ import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Plus, TrendingUp, TrendingDown, Wallet, Users,
-  Trash2, HardHat
+  Trash2, HardHat, Camera, X, ZoomIn
 } from 'lucide-react'
 import { formatCurrency, formatDate, CATEGORIAS_LANCAMENTO, TIPOS_PAGAMENTO, STATUS_OBRA } from '@/lib/utils'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
@@ -60,7 +60,10 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
   const router = useRouter()
   const [obra, setObra] = useState<ObraDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'lancamentos' | 'pagamentos'>('lancamentos')
+  const [activeTab, setActiveTab] = useState<'lancamentos' | 'pagamentos' | 'fotos'>('lancamentos')
+  const [fotos, setFotos] = useState<{ id: string; imagemPath: string; descricao: string | null; dataRegistro: string; user: { name: string } }[]>([])
+  const [fotoModal, setFotoModal] = useState<string | null>(null)
+  const [uploadingFoto, setUploadingFoto] = useState(false)
   const [modalLancamento, setModalLancamento] = useState(false)
   const [modalPagamento, setModalPagamento] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -69,11 +72,43 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
   const { register: regL, handleSubmit: handleL, reset: resetL } = useForm()
   const { register: regP, handleSubmit: handleP, reset: resetP } = useForm()
 
+  const loadFotos = () =>
+    fetch(`/api/obras/${id}/fotos`).then((r) => r.json()).then(setFotos)
+
   const load = () => {
     fetch(`/api/obras/${id}`)
       .then((r) => r.json())
       .then(setObra)
       .finally(() => setLoading(false))
+    loadFotos()
+  }
+
+  const handleFotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingFoto(true)
+    const reader = new FileReader()
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(',')[1]
+      await fetch(`/api/obras/${id}/fotos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imagemBase64: base64,
+          dataRegistro: new Date().toISOString(),
+          descricao: null,
+        }),
+      })
+      loadFotos()
+      setUploadingFoto(false)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const deleteFoto = async (fotoId: string) => {
+    if (!confirm('Excluir esta foto?')) return
+    await fetch(`/api/obras/${id}/fotos/${fotoId}`, { method: 'DELETE' })
+    loadFotos()
   }
 
   useEffect(() => {
@@ -281,17 +316,32 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
               >
                 Pagamentos ({obra.pagamentos.length})
               </button>
+              <button
+                onClick={() => setActiveTab('fotos')}
+                className={`px-4 py-1.5 text-sm rounded-md font-medium transition-colors ${activeTab === 'fotos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Fotos ({fotos.length})
+              </button>
             </div>
-            <Button
-              size="sm"
-              onClick={() => activeTab === 'lancamentos' ? (resetL({ tipo: 'saida', data: new Date().toISOString().split('T')[0], categoria: 'material' }), setModalLancamento(true)) : (resetP({ tipo: 'salario', data: new Date().toISOString().split('T')[0] }), setModalPagamento(true))}
-            >
-              <Plus size={14} /> Novo
-            </Button>
+            {activeTab !== 'fotos' ? (
+              <Button
+                size="sm"
+                onClick={() => activeTab === 'lancamentos' ? (resetL({ tipo: 'saida', data: new Date().toISOString().split('T')[0], categoria: 'material' }), setModalLancamento(true)) : (resetP({ tipo: 'salario', data: new Date().toISOString().split('T')[0] }), setModalPagamento(true))}
+              >
+                <Plus size={14} /> Novo
+              </Button>
+            ) : (
+              <label className="cursor-pointer">
+                <span className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors ${uploadingFoto ? 'opacity-60 pointer-events-none' : ''}`}>
+                  <Camera size={14} /> {uploadingFoto ? 'Enviando...' : 'Adicionar Foto'}
+                </span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleFotoUpload} disabled={uploadingFoto} />
+              </label>
+            )}
           </div>
         </CardHeader>
         <CardBody className="p-0">
-          {activeTab === 'lancamentos' ? (
+          {activeTab === 'lancamentos' && (
             obra.lancamentos.length === 0 ? (
               <p className="text-center text-sm text-slate-400 py-8">Nenhum lançamento</p>
             ) : (
@@ -319,7 +369,8 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
                 ))}
               </div>
             )
-          ) : (
+          )}
+          {activeTab === 'pagamentos' && (
             obra.pagamentos.length === 0 ? (
               <p className="text-center text-sm text-slate-400 py-8">Nenhum pagamento</p>
             ) : (
@@ -343,8 +394,49 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             )
           )}
+          {activeTab === 'fotos' && (
+            /* Fotos */
+            fotos.length === 0 ? (
+              <div className="py-12 text-center text-slate-400">
+                <Camera className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>Nenhuma foto registrada</p>
+                <p className="text-xs mt-1">Use o botão "Adicionar Foto" acima ou o app mobile</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4">
+                {fotos.map((f) => (
+                  <div key={f.id} className="group relative aspect-square rounded-xl overflow-hidden bg-slate-100 cursor-pointer"
+                    onClick={() => setFotoModal(f.imagemPath)}>
+                    <img src={f.imagemPath} alt={f.descricao ?? ''} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-end">
+                      <div className="p-2 text-white opacity-0 group-hover:opacity-100 transition-opacity w-full">
+                        {f.descricao && <p className="text-xs font-semibold truncate">{f.descricao}</p>}
+                        <p className="text-xs opacity-70">{new Date(f.dataRegistro).toLocaleDateString('pt-BR')} · {f.user.name}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteFoto(f.id) }}
+                      className="absolute top-2 right-2 p-1 bg-red-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
         </CardBody>
       </Card>
+
+      {/* Lightbox foto */}
+      {fotoModal && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setFotoModal(null)}>
+          <button className="absolute top-4 right-4 text-white" onClick={() => setFotoModal(null)}>
+            <X size={32} />
+          </button>
+          <img src={fotoModal} className="max-w-full max-h-full rounded-xl object-contain" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
 
       {/* Modal Lançamento */}
       <Modal isOpen={modalLancamento} onClose={() => setModalLancamento(false)} title="Novo Lançamento">

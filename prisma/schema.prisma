@@ -21,11 +21,15 @@ model Obra {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  lancamentos      Lancamento[]
-  pagamentos       Pagamento[]
-  funcionariosObra FuncionarioObra[]
-  solicitacoes     SolicitacaoAdiantamento[]
-  fotos            FotoRecibo[]
+  lancamentos       Lancamento[]
+  pagamentos        Pagamento[]
+  funcionariosObra  FuncionarioObra[]
+  solicitacoes      SolicitacaoAdiantamento[]
+  fotosRecibo       FotoRecibo[]
+  fotosObra         FotoObra[]
+  pontos            RegistroPonto[]
+  movOrigem         MovimentacaoMaterial[] @relation("MovOrigem")
+  movDestino        MovimentacaoMaterial[] @relation("MovDestino")
 }
 
 model Funcionario {
@@ -43,6 +47,7 @@ model Funcionario {
   pagamentos       Pagamento[]
   funcionariosObra FuncionarioObra[]
   solicitacoes     SolicitacaoAdiantamento[]
+  pontos           RegistroPonto[]
 }
 
 model FuncionarioObra {
@@ -100,10 +105,13 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  grupos                 UserGrupo[]
-  solicitacoesCriadas    SolicitacaoAdiantamento[] @relation("SolicitacaoCriador")
-  solicitacoesAprovadas  SolicitacaoAdiantamento[] @relation("SolicitacaoAprovador")
-  fotos                  FotoRecibo[]
+  grupos                UserGrupo[]
+  solicitacoesCriadas   SolicitacaoAdiantamento[] @relation("SolicitacaoCriador")
+  solicitacoesAprovadas SolicitacaoAdiantamento[] @relation("SolicitacaoAprovador")
+  fotosRecibo           FotoRecibo[]
+  fotosObra             FotoObra[]
+  pontosRegistrados     RegistroPonto[]
+  movimentacoes         MovimentacaoMaterial[]
 }
 
 model Grupo {
@@ -147,18 +155,84 @@ model SolicitacaoAdiantamento {
   aprovadoPor User?       @relation("SolicitacaoAprovador", fields: [aprovadoPorId], references: [id])
 }
 
-// ─── Fotos de Recibos ─────────────────────────────────────────────────────────
+// ─── Fotos de Recibos (OCR) ───────────────────────────────────────────────────
 
 model FotoRecibo {
-  id           String   @id @default(cuid())
-  userId       String
-  obraId       String?
-  imagemBase64 String?
-  textoOCR     String?
+  id                String   @id @default(cuid())
+  userId            String
+  obraId            String?
+  imagemBase64      String?
+  textoOCR          String?
   dadosEstruturados String?
-  status       String   @default("processando")
-  createdAt    DateTime @default(now())
+  status            String   @default("processando")
+  createdAt         DateTime @default(now())
 
   user User  @relation(fields: [userId], references: [id])
   obra Obra? @relation(fields: [obraId], references: [id])
+}
+
+// ─── Fotos da Obra ────────────────────────────────────────────────────────────
+
+model FotoObra {
+  id           String   @id @default(cuid())
+  obraId       String
+  userId       String
+  imagemPath   String   // URL relativa: /uploads/obras/[obraId]/[filename]
+  descricao    String?
+  dataRegistro DateTime
+  createdAt    DateTime @default(now())
+
+  obra Obra @relation(fields: [obraId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+}
+
+// ─── Registro de Ponto ────────────────────────────────────────────────────────
+
+model RegistroPonto {
+  id              String   @id @default(cuid())
+  funcionarioId   String
+  obraId          String?
+  tipo            String   // entrada | saida
+  dataHora        DateTime
+  registradoPorId String
+  observacao      String?
+  createdAt       DateTime @default(now())
+
+  funcionario   Funcionario @relation(fields: [funcionarioId], references: [id])
+  obra          Obra?       @relation(fields: [obraId], references: [id])
+  registradoPor User        @relation(fields: [registradoPorId], references: [id])
+}
+
+// ─── Controle de Material ─────────────────────────────────────────────────────
+
+model Material {
+  id              String   @id @default(cuid())
+  nome            String
+  descricao       String?
+  codigo          String?  @unique
+  categoria       String?
+  unidade         String   @default("un")
+  quantidadeTotal Int      @default(1)
+  status          String   @default("ativo")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  movimentacoes MovimentacaoMaterial[]
+}
+
+model MovimentacaoMaterial {
+  id              String   @id @default(cuid())
+  materialId      String
+  obraOrigemId    String?  // null = depósito
+  obraDestinoId   String?  // null = depósito
+  quantidade      Int      @default(1)
+  data            DateTime
+  observacao      String?
+  registradoPorId String
+  createdAt       DateTime @default(now())
+
+  material      Material @relation(fields: [materialId], references: [id])
+  obraOrigem    Obra?    @relation("MovOrigem", fields: [obraOrigemId], references: [id])
+  obraDestino   Obra?    @relation("MovDestino", fields: [obraDestinoId], references: [id])
+  registradoPor User     @relation(fields: [registradoPorId], references: [id])
 }
