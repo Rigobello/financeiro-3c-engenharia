@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
         cpf: body.cpf || null,
         cargo: body.cargo,
         salarioBase: parseFloat(body.salarioBase),
+        valorHora: body.valorHora ? parseFloat(body.valorHora) : null,
         status: body.status || 'ativo',
         telefone: body.telefone || null,
         email: body.email || null,

@@ -38,6 +38,8 @@ model Funcionario {
   cpf         String?  @unique
   cargo       String
   salarioBase Float
+  valorHora   Float?
+  fotoCaminho String?
   status      String   @default("ativo")
   telefone    String?
   email       String?
@@ -196,6 +198,7 @@ model RegistroPonto {
   dataHora        DateTime
   registradoPorId String
   observacao      String?
+  status          String   @default("em_aberto")
   createdAt       DateTime @default(now())
 
   funcionario   Funcionario @relation(fields: [funcionarioId], references: [id])
@@ -213,6 +216,7 @@ model Material {
   categoria       String?
   unidade         String   @default("un")
   quantidadeTotal Int      @default(1)
+  fotoCaminho     String?
   status          String   @default("ativo")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

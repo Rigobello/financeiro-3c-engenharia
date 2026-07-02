@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Plus, Search, Users, Phone, Mail } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Plus, Search, Users, Phone, Mail, Camera } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { Card, CardBody } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -15,6 +15,8 @@ interface Funcionario {
   cpf: string | null
   cargo: string
   salarioBase: number
+  valorHora: number | null
+  fotoCaminho: string | null
   status: string
   telefone: string | null
   email: string | null
@@ -34,6 +36,9 @@ export default function FuncionariosPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editFuncionario, setEditFuncionario] = useState<Funcionario | null>(null)
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null)
+  const [fotoBase64, setFotoBase64] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const { register, handleSubmit, reset } = useForm()
 
@@ -49,17 +54,22 @@ export default function FuncionariosPage() {
 
   const openNew = () => {
     setEditFuncionario(null)
+    setFotoPreview(null)
+    setFotoBase64(null)
     reset({ status: 'ativo' })
     setModalOpen(true)
   }
 
   const openEdit = (f: Funcionario) => {
     setEditFuncionario(f)
+    setFotoPreview(f.fotoCaminho ? `${f.fotoCaminho}?t=${Date.now()}` : null)
+    setFotoBase64(null)
     reset({
       nome: f.nome,
       cpf: f.cpf || '',
       cargo: f.cargo,
       salarioBase: f.salarioBase,
+      valorHora: f.valorHora ?? '',
       status: f.status,
       telefone: f.telefone || '',
       email: f.email || '',
@@ -67,16 +77,44 @@ export default function FuncionariosPage() {
     setModalOpen(true)
   }
 
+  const handleFotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const result = ev.target?.result as string
+      setFotoPreview(result)
+      setFotoBase64(result)
+    }
+    reader.readAsDataURL(file)
+  }
+
   const onSubmit = async (data: Record<string, unknown>) => {
     setSaving(true)
     try {
-      const url = editFuncionario ? `/api/funcionarios/${editFuncionario.id}` : '/api/funcionarios'
-      const method = editFuncionario ? 'PUT' : 'POST'
-      await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
+      if (editFuncionario) {
+        await fetch(`/api/funcionarios/${editFuncionario.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...data, ...(fotoBase64 ? { fotoBase64 } : {}) }),
+        })
+      } else {
+        const res = await fetch('/api/funcionarios', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        })
+        if (fotoBase64 && res.ok) {
+          const created = await res.json()
+          if (created?.id) {
+            await fetch(`/api/funcionarios/${created.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...data, fotoBase64 }),
+            })
+          }
+        }
+      }
       setModalOpen(false)
       load()
     } finally {
@@ -132,11 +170,19 @@ export default function FuncionariosPage() {
               <CardBody className="space-y-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-bold text-orange-600">
-                        {f.nome.split(' ').map((n) => n[0]).slice(0, 2).join('')}
-                      </span>
-                    </div>
+                    {f.fotoCaminho ? (
+                      <img
+                        src={`${f.fotoCaminho}?t=${f.id}`}
+                        alt={f.nome}
+                        className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-slate-200"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm font-bold text-orange-600">
+                          {f.nome.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+                        </span>
+                      </div>
+                    )}
                     <div>
                       <p className="font-semibold text-slate-800">{f.nome}</p>
                       <p className="text-xs text-slate-500">{f.cargo}</p>
@@ -160,6 +206,12 @@ export default function FuncionariosPage() {
                     <p className="text-xs text-slate-400">Total Recebido</p>
                     <p className="font-medium text-purple-600">{formatCurrency(f.totalRecebido)}</p>
                   </div>
+                  {f.valorHora && (
+                    <div className="col-span-2">
+                      <p className="text-xs text-slate-400">Valor/Hora</p>
+                      <p className="font-medium text-orange-600">{formatCurrency(f.valorHora)}/h</p>
+                    </div>
+                  )}
                 </div>
 
                 {f.obrasAtivas > 0 && (
@@ -199,6 +251,32 @@ export default function FuncionariosPage() {
         size="lg"
       >
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Foto */}
+          <div className="flex items-center gap-4">
+            <div
+              className="w-20 h-20 rounded-full bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden cursor-pointer hover:border-orange-400 transition-colors flex-shrink-0"
+              onClick={() => fileRef.current?.click()}
+            >
+              {fotoPreview ? (
+                <img src={fotoPreview} alt="Foto" className="w-full h-full object-cover" />
+              ) : (
+                <Camera size={24} className="text-slate-400" />
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-700">Foto do funcionário</p>
+              <p className="text-xs text-slate-400 mt-0.5">Clique para selecionar</p>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="mt-2 text-xs text-orange-500 hover:underline"
+              >
+                {fotoPreview ? 'Alterar foto' : 'Adicionar foto'}
+              </button>
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFotoChange} />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <Input label="Nome Completo *" {...register('nome', { required: true })} placeholder="Nome do funcionário" />
@@ -206,9 +284,12 @@ export default function FuncionariosPage() {
             <Input label="CPF" {...register('cpf')} placeholder="000.000.000-00" />
             <Input label="Cargo *" {...register('cargo', { required: true })} placeholder="Ex: Pedreiro, Mestre de Obras" />
             <Input label="Salário Base (R$) *" type="number" step="0.01" {...register('salarioBase', { required: true })} placeholder="0,00" />
+            <Input label="Valor Hora (R$)" type="number" step="0.01" {...register('valorHora')} placeholder="0,00" />
             <Select label="Status" options={statusOptions} {...register('status')} />
             <Input label="Telefone" {...register('telefone')} placeholder="(00) 00000-0000" />
-            <Input label="E-mail" type="email" {...register('email')} placeholder="email@exemplo.com" />
+            <div className="col-span-2">
+              <Input label="E-mail" type="email" {...register('email')} placeholder="email@exemplo.com" />
+            </div>
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>

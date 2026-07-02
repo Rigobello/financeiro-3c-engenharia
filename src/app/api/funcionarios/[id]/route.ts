@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import fs from 'fs'
+import path from 'path'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -30,6 +32,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params
     const body = await req.json()
+
+    let fotoCaminho: string | undefined = undefined
+
+    if (body.fotoBase64) {
+      const dir = path.join(process.cwd(), 'public', 'uploads', 'funcionarios', id)
+      fs.mkdirSync(dir, { recursive: true })
+      const filePath = path.join(dir, 'foto.jpg')
+      const base64 = body.fotoBase64.replace(/^data:image\/\w+;base64,/, '')
+      fs.writeFileSync(filePath, Buffer.from(base64, 'base64'))
+      fotoCaminho = `/uploads/funcionarios/${id}/foto.jpg`
+    }
+
     const funcionario = await prisma.funcionario.update({
       where: { id },
       data: {
@@ -37,9 +51,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         cpf: body.cpf || null,
         cargo: body.cargo,
         salarioBase: parseFloat(body.salarioBase),
+        valorHora: body.valorHora ? parseFloat(body.valorHora) : null,
         status: body.status,
         telefone: body.telefone || null,
         email: body.email || null,
+        ...(fotoCaminho ? { fotoCaminho } : {}),
       },
     })
     return NextResponse.json(funcionario)

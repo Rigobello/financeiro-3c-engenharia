@@ -1,24 +1,56 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, Clock, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, Clock, Calculator } from 'lucide-react'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
-import { Input, Select } from '@/components/ui/Input'
 import { useForm } from 'react-hook-form'
-import { formatDate } from '@/lib/utils'
+import { formatCurrency } from '@/lib/utils'
 
 interface Funcionario { id: string; nome: string; cargo: string }
-interface Obra { id: string; nome: string }
+interface Obra { id: string; nome: string; status: string }
 interface RegistroPonto {
   id: string
   tipo: string
   dataHora: string
   observacao: string | null
-  funcionario: { nome: string; cargo: string }
+  status: string
+  funcionario: { id: string; nome: string; cargo: string }
   obra: { nome: string } | null
   registradoPor: { name: string }
+}
+
+interface ConsolidaPar {
+  entradaId: string
+  saidaId: string | null
+  data: string
+  entrada: string
+  saida: string | null
+  minutos: number
+  horas: number
+  obra: string | null
+}
+
+interface ConsolidaResult {
+  funcionario: { id: string; nome: string; cargo: string; valorHora: number | null }
+  periodo: { startDate: string; endDate: string }
+  pares: ConsolidaPar[]
+  totalMinutos: number
+  totalHoras: number
+  valorHora: number | null
+  totalAPagar: number | null
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  em_aberto: 'Em Aberto',
+  aguarda_pagamento: 'Aguarda Pgto.',
+  pago: 'Pago',
+}
+const STATUS_COR: Record<string, string> = {
+  em_aberto: 'bg-slate-100 text-slate-600',
+  aguarda_pagamento: 'bg-amber-100 text-amber-700',
+  pago: 'bg-green-100 text-green-700',
 }
 
 export default function PontoPage() {
@@ -27,7 +59,13 @@ export default function PontoPage() {
   const [obras, setObras] = useState<Obra[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
+  const [modalConsolidar, setModalConsolidar] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [consolidando, setConsolidando] = useState(false)
+  const [consolidaResult, setConsolidaResult] = useState<ConsolidaResult | null>(null)
+  const [consolidaFuncId, setConsolidaFuncId] = useState('')
+  const [consolidaInicio, setConsolidaInicio] = useState('')
+  const [consolidaFim, setConsolidaFim] = useState('')
 
   // Filtros
   const [filtroFuncionario, setFiltroFuncionario] = useState('')
@@ -81,15 +119,67 @@ export default function PontoPage() {
     load()
   }
 
+  const updateStatus = async (id: string, status: string) => {
+    await fetch(`/api/ponto/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    setPontos((prev) => prev.map((p) => p.id === id ? { ...p, status } : p))
+  }
+
+  const consolidar = async () => {
+    if (!consolidaFuncId || !consolidaInicio || !consolidaFim) return
+    setConsolidando(true)
+    setConsolidaResult(null)
+    try {
+      const params = new URLSearchParams({
+        funcionarioId: consolidaFuncId,
+        startDate: consolidaInicio,
+        endDate: consolidaFim,
+      })
+      const res = await fetch(`/api/ponto/consolidar?${params}`)
+      const data = await res.json()
+      if (res.ok) setConsolidaResult(data)
+      else alert(data.error)
+    } finally {
+      setConsolidando(false)
+    }
+  }
+
+  const marcarAguardaPagamento = async () => {
+    if (!consolidaResult) return
+    const ids = consolidaResult.pares.flatMap((p) =>
+      [p.entradaId, p.saidaId].filter(Boolean) as string[]
+    )
+    await Promise.all(ids.map((id) =>
+      fetch(`/api/ponto/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'aguarda_pagamento' }),
+      })
+    ))
+    setModalConsolidar(false)
+    load()
+  }
+
   const tipoLabel: Record<string, string> = { entrada: 'Entrada', saida: 'Saída' }
   const tipoCor: Record<string, string> = { entrada: 'text-emerald-600 bg-emerald-50', saida: 'text-red-600 bg-red-50' }
 
-  // Agrupado por dia
   const grouped: Record<string, RegistroPonto[]> = {}
   for (const p of pontos) {
     const day = p.dataHora.slice(0, 10)
     if (!grouped[day]) grouped[day] = []
     grouped[day].push(p)
+  }
+
+  const fmtHora = (iso: string) =>
+    new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+  const fmtMin = (min: number) => {
+    const h = Math.floor(min / 60)
+    const m = min % 60
+    return `${h}h${m > 0 ? `${m.toString().padStart(2, '0')}min` : ''}`
   }
 
   return (
@@ -99,9 +189,14 @@ export default function PontoPage() {
           <h1 className="text-2xl font-bold text-slate-900">Registro de Ponto</h1>
           <p className="text-slate-500 text-sm mt-1">{pontos.length} registro{pontos.length !== 1 ? 's' : ''}</p>
         </div>
-        <Button onClick={() => { reset({ dataHora: new Date().toISOString().slice(0, 16) }); setModalOpen(true) }}>
-          <Plus className="w-4 h-4 mr-2" /> Registrar Ponto
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => { setConsolidaResult(null); setModalConsolidar(true) }}>
+            <Calculator className="w-4 h-4 mr-2" /> Consolidar
+          </Button>
+          <Button onClick={() => { reset({ dataHora: new Date().toISOString().slice(0, 16) }); setModalOpen(true) }}>
+            <Plus className="w-4 h-4 mr-2" /> Registrar Ponto
+          </Button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -176,7 +271,7 @@ export default function PontoPage() {
               <div className="divide-y divide-slate-100">
                 {registros.map((p) => (
                   <div key={p.id} className="flex items-center justify-between px-6 py-3 hover:bg-slate-50">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                       <span className={`text-xs font-bold px-2 py-1 rounded-full ${tipoCor[p.tipo]}`}>
                         {tipoLabel[p.tipo] ?? p.tipo}
                       </span>
@@ -188,7 +283,32 @@ export default function PontoPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
+                      {/* Status badge + actions */}
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COR[p.status] ?? STATUS_COR.em_aberto}`}>
+                          {STATUS_LABEL[p.status] ?? p.status}
+                        </span>
+                        {p.status === 'em_aberto' && (
+                          <button
+                            onClick={() => updateStatus(p.id, 'aguarda_pagamento')}
+                            className="text-xs text-amber-600 hover:text-amber-800 border border-amber-300 rounded px-1.5 py-0.5 hover:bg-amber-50"
+                            title="Marcar como aguarda pagamento"
+                          >
+                            → Pgto.
+                          </button>
+                        )}
+                        {p.status === 'aguarda_pagamento' && (
+                          <button
+                            onClick={() => updateStatus(p.id, 'pago')}
+                            className="text-xs text-green-600 hover:text-green-800 border border-green-300 rounded px-1.5 py-0.5 hover:bg-green-50"
+                            title="Marcar como pago"
+                          >
+                            ✓ Pago
+                          </button>
+                        )}
+                      </div>
+
                       <div className="text-right">
                         <p className="font-mono font-semibold text-slate-700">
                           {new Date(p.dataHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
@@ -208,7 +328,7 @@ export default function PontoPage() {
         ))
       )}
 
-      {/* Modal */}
+      {/* Modal Registrar Ponto */}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Registrar Ponto">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
@@ -248,6 +368,124 @@ export default function PontoPage() {
             <Button type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Registrar'}</Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal Consolidar */}
+      <Modal isOpen={modalConsolidar} onClose={() => setModalConsolidar(false)}
+        title="Consolidar Horas" size="lg">
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700 mb-1 block">Funcionário *</label>
+              <select
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                value={consolidaFuncId}
+                onChange={(e) => { setConsolidaFuncId(e.target.value); setConsolidaResult(null) }}
+              >
+                <option value="">Selecione...</option>
+                {funcionarios.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-slate-700 mb-1 block">De *</label>
+              <input type="date" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                value={consolidaInicio} onChange={(e) => { setConsolidaInicio(e.target.value); setConsolidaResult(null) }} />
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-slate-700 mb-1 block">Até *</label>
+              <input type="date" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                value={consolidaFim} onChange={(e) => { setConsolidaFim(e.target.value); setConsolidaResult(null) }} />
+            </div>
+          </div>
+          <Button onClick={consolidar} disabled={consolidando || !consolidaFuncId || !consolidaInicio || !consolidaFim}>
+            {consolidando ? 'Calculando...' : 'Calcular Horas'}
+          </Button>
+
+          {consolidaResult && (
+            <div className="space-y-4 border-t border-slate-100 pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-slate-800">{consolidaResult.funcionario.nome}</p>
+                  <p className="text-sm text-slate-500">{consolidaResult.funcionario.cargo}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-slate-400">Período</p>
+                  <p className="text-sm font-semibold text-slate-700">
+                    {new Date(consolidaResult.periodo.startDate + 'T12:00').toLocaleDateString('pt-BR')}
+                    {' — '}
+                    {new Date(consolidaResult.periodo.endDate + 'T12:00').toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+              </div>
+
+              {/* Tabela de pares */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-left">
+                      <th className="px-3 py-2 text-xs font-semibold text-slate-500">Data</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-slate-500">Entrada</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-slate-500">Saída</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-slate-500">Horas</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-slate-500">Obra</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {consolidaResult.pares.map((p, i) => (
+                      <tr key={i} className="border-t border-slate-100">
+                        <td className="px-3 py-2 font-mono text-xs">
+                          {new Date(p.data + 'T12:00').toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="px-3 py-2 text-emerald-600 font-mono">
+                          {fmtHora(p.entrada)}
+                        </td>
+                        <td className="px-3 py-2 text-red-500 font-mono">
+                          {p.saida ? fmtHora(p.saida) : <span className="text-amber-500">Aberto</span>}
+                        </td>
+                        <td className="px-3 py-2 font-semibold">
+                          {p.minutos > 0 ? fmtMin(p.minutos) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-slate-500 text-xs">{p.obra ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Resumo */}
+              <div className="bg-slate-50 rounded-xl p-4 grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-xs text-slate-400">Total de Horas</p>
+                  <p className="text-xl font-bold text-slate-800">{fmtMin(consolidaResult.totalMinutos)}</p>
+                  <p className="text-xs text-slate-400">{consolidaResult.totalHoras.toFixed(2)}h decimais</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Valor/Hora</p>
+                  <p className="text-xl font-bold text-orange-600">
+                    {consolidaResult.valorHora ? formatCurrency(consolidaResult.valorHora) : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Total a Pagar</p>
+                  <p className="text-xl font-bold text-purple-600">
+                    {consolidaResult.totalAPagar !== null ? formatCurrency(consolidaResult.totalAPagar) : '—'}
+                  </p>
+                  {!consolidaResult.valorHora && (
+                    <p className="text-xs text-amber-600">Cadastre o valor/hora do funcionário</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <Button variant="secondary" onClick={() => setModalConsolidar(false)}>Fechar</Button>
+                <Button onClick={marcarAguardaPagamento}
+                  className="bg-amber-500 hover:bg-amber-600">
+                  Marcar como "Aguarda Pagamento"
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   )
