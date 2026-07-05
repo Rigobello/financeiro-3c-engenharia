@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Lock, User, Eye, EyeOff } from 'lucide-react'
-import Image from 'next/image'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -38,7 +37,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex" style={{ background: 'linear-gradient(135deg, #1e2847 0%, #2a3560 50%, #1e3a5f 100%)' }}>
       {/* Left panel — branding */}
       <div className="hidden lg:flex flex-col justify-center items-center flex-1 p-12 text-white">
-        <Image src="/Logo3C.png" alt="3C Engenharia" width={200} height={215} className="mb-8 drop-shadow-lg" />
+        <img src="/Logo3C.png" alt="3C Engenharia" width={200} height={215} className="mb-8 drop-shadow-lg" />
         <h1 className="text-4xl font-bold mb-3">3C Engenharia</h1>
         <p className="text-blue-200/80 text-lg text-center max-w-sm">
           Plataforma de Controle Financeiro e Operacional
@@ -62,7 +61,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="flex justify-center mb-8 lg:hidden">
-            <Image src="/Logo3C.png" alt="3C Engenharia" width={100} height={108} />
+            <img src="/Logo3C.png" alt="3C Engenharia" width={100} height={108} />
           </div>
 
           <div className="bg-white rounded-3xl p-8 shadow-2xl">

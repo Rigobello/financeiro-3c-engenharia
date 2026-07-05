@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import Image from 'next/image'
 import {
   LayoutDashboard, HardHat, Users, Wallet, CreditCard,
   ClipboardList, Clock, Package, Settings, ChevronRight,
@@ -46,7 +45,7 @@ export function Sidebar({ user }: SidebarProps) {
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
         <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 shadow">
-          <Image src="/Logo3C.png" alt="3C" width={32} height={32} className="object-contain" />
+          <img src="/Logo3C.png" alt="3C" width={32} height={32} className="object-contain" />
         </div>
         <div>
           <p className="font-bold text-sm leading-tight text-white">3C Engenharia</p>
