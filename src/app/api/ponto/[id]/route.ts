@@ -4,8 +4,11 @@ import { getSession, isAdmin } from '@/lib/auth'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession()
-  if (!session || (!isAdmin(session) && !session.grupos.includes('Ponto'))) {
-    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
+  if (!session) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+
+  // Only admins can change status
+  if (!isAdmin(session)) {
+    return NextResponse.json({ error: 'Apenas administradores podem alterar o status de ponto' }, { status: 403 })
   }
 
   const { id } = await params

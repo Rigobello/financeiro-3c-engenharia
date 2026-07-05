@@ -4,7 +4,7 @@ import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Plus, TrendingUp, TrendingDown, Wallet, Users,
-  Trash2, HardHat, Camera, X, ZoomIn
+  Trash2, HardHat, Camera, X, Activity, GripVertical, Pencil
 } from 'lucide-react'
 import { formatCurrency, formatDate, CATEGORIAS_LANCAMENTO, TIPOS_PAGAMENTO, STATUS_OBRA } from '@/lib/utils'
 import { Card, CardBody, CardHeader } from '@/components/ui/Card'
@@ -18,49 +18,31 @@ import {
 } from 'recharts'
 
 interface ObraDetail {
-  id: string
-  nome: string
-  cliente: string
-  endereco: string | null
-  cidade: string | null
-  dataInicio: string
-  dataFim: string | null
-  status: string
-  orcamento: number
-  saldo: number
-  totalEntradas: number
-  totalSaidas: number
-  totalPagamentos: number
-  lancamentos: {
-    id: string
-    tipo: string
-    valor: number
-    descricao: string
-    categoria: string
-    data: string
-  }[]
-  pagamentos: {
-    id: string
-    valor: number
-    tipo: string
-    data: string
-    descricao: string | null
-    funcionario: { nome: string; cargo: string }
-  }[]
-  funcionariosObra: {
-    id: string
-    funcionario: { id: string; nome: string; cargo: string; salarioBase: number }
-  }[]
+  id: string; nome: string; cliente: string; endereco: string | null
+  cidade: string | null; dataInicio: string; dataFim: string | null
+  status: string; orcamento: number; saldo: number
+  totalEntradas: number; totalSaidas: number; totalPagamentos: number
+  lancamentos: { id: string; tipo: string; valor: number; descricao: string; categoria: string; data: string }[]
+  pagamentos: { id: string; valor: number; tipo: string; data: string; descricao: string | null; funcionario: { nome: string; cargo: string } }[]
+  funcionariosObra: { id: string; funcionario: { id: string; nome: string; cargo: string; salarioBase: number } }[]
 }
 
-const COLORS = ['#22c55e', '#f97316', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6']
+interface AtividadeObra {
+  id: string; nome: string; descricao: string | null
+  peso: number; unidade: string | null; ordem: number; status: string
+}
+
+const COLORS = ['#22c55e', '#5165a8', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6']
+const PESOS = [{ value: '1', label: 'Baixo (1)' }, { value: '2', label: 'Médio (2)' }, { value: '3', label: 'Alto (3)' }]
+const PESO_LABEL: Record<number, string> = { 1: 'Baixo', 2: 'Médio', 3: 'Alto' }
+const PESO_COLOR: Record<number, string> = { 1: 'bg-slate-100 text-slate-600', 2: 'bg-teal-100 text-teal-700', 3: 'bg-orange-100 text-orange-700' }
 
 export default function ObraDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
   const [obra, setObra] = useState<ObraDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'lancamentos' | 'pagamentos' | 'fotos'>('lancamentos')
+  const [activeTab, setActiveTab] = useState<'lancamentos' | 'pagamentos' | 'fotos' | 'atividades'>('lancamentos')
   const [fotos, setFotos] = useState<{ id: string; imagemPath: string; descricao: string | null; dataRegistro: string; user: { name: string } }[]>([])
   const [fotoModal, setFotoModal] = useState<string | null>(null)
   const [uploadingFoto, setUploadingFoto] = useState(false)
@@ -69,11 +51,27 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
   const [saving, setSaving] = useState(false)
   const [funcionarios, setFuncionarios] = useState<{ id: string; nome: string }[]>([])
 
+  // Atividades state
+  const [atividades, setAtividades] = useState<AtividadeObra[]>([])
+  const [loadingAtiv, setLoadingAtiv] = useState(false)
+  const [modalAtividade, setModalAtividade] = useState(false)
+  const [editAtividade, setEditAtividade] = useState<AtividadeObra | null>(null)
+  const [savingAtiv, setSavingAtiv] = useState(false)
+
   const { register: regL, handleSubmit: handleL, reset: resetL } = useForm()
   const { register: regP, handleSubmit: handleP, reset: resetP } = useForm()
+  const { register: regA, handleSubmit: handleA, reset: resetA } = useForm()
 
   const loadFotos = () =>
     fetch(`/api/obras/${id}/fotos`).then((r) => r.json()).then(setFotos)
+
+  const loadAtividades = () => {
+    setLoadingAtiv(true)
+    fetch(`/api/obras/${id}/atividades`)
+      .then((r) => r.json())
+      .then(setAtividades)
+      .finally(() => setLoadingAtiv(false))
+  }
 
   const load = () => {
     fetch(`/api/obras/${id}`)
@@ -93,11 +91,7 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
       await fetch(`/api/obras/${id}/fotos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imagemBase64: base64,
-          dataRegistro: new Date().toISOString(),
-          descricao: null,
-        }),
+        body: JSON.stringify({ imagemBase64: base64, dataRegistro: new Date().toISOString(), descricao: null }),
       })
       loadFotos()
       setUploadingFoto(false)
@@ -113,6 +107,7 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     load()
+    loadAtividades()
     fetch('/api/funcionarios')
       .then((r) => r.json())
       .then((data) => setFuncionarios(data.map((f: { id: string; nome: string }) => ({ id: f.id, nome: f.nome }))))
@@ -122,32 +117,58 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
     setSaving(true)
     try {
       await fetch('/api/lancamentos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...data, obraId: id }),
       })
-      setModalLancamento(false)
-      resetL()
-      load()
-    } finally {
-      setSaving(false)
-    }
+      setModalLancamento(false); resetL(); load()
+    } finally { setSaving(false) }
   }
 
   const submitPagamento = async (data: Record<string, unknown>) => {
     setSaving(true)
     try {
       await fetch('/api/pagamentos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...data, obraId: id }),
       })
-      setModalPagamento(false)
-      resetP()
-      load()
-    } finally {
-      setSaving(false)
-    }
+      setModalPagamento(false); resetP(); load()
+    } finally { setSaving(false) }
+  }
+
+  const submitAtividade = async (data: Record<string, unknown>) => {
+    setSavingAtiv(true)
+    try {
+      if (editAtividade) {
+        await fetch(`/api/obras/${id}/atividades/${editAtividade.id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...data, peso: Number(data.peso) }),
+        })
+      } else {
+        await fetch(`/api/obras/${id}/atividades`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...data, peso: Number(data.peso) }),
+        })
+      }
+      setModalAtividade(false); setEditAtividade(null); resetA(); loadAtividades()
+    } finally { setSavingAtiv(false) }
+  }
+
+  const deleteAtividade = async (atividadeId: string) => {
+    if (!confirm('Inativar esta atividade?')) return
+    await fetch(`/api/obras/${id}/atividades/${atividadeId}`, { method: 'DELETE' })
+    loadAtividades()
+  }
+
+  const openNewAtividade = () => {
+    setEditAtividade(null)
+    resetA({ peso: '2' })
+    setModalAtividade(true)
+  }
+
+  const openEditAtividade = (a: AtividadeObra) => {
+    setEditAtividade(a)
+    resetA({ nome: a.nome, descricao: a.descricao ?? '', peso: String(a.peso), unidade: a.unidade ?? '' })
+    setModalAtividade(true)
   }
 
   const deleteLancamento = async (lancId: string) => {
@@ -186,6 +207,8 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
     { value: 'entrada', label: 'Entrada (Receita)' },
     { value: 'saida', label: 'Saída (Despesa)' },
   ]
+
+  const pesoTotal = atividades.reduce((s, a) => s + a.peso, 0)
 
   return (
     <div className="p-6 space-y-6">
@@ -302,45 +325,49 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
       {/* Tabs */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-              <button
-                onClick={() => setActiveTab('lancamentos')}
-                className={`px-4 py-1.5 text-sm rounded-md font-medium transition-colors ${activeTab === 'lancamentos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Lançamentos ({obra.lancamentos.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('pagamentos')}
-                className={`px-4 py-1.5 text-sm rounded-md font-medium transition-colors ${activeTab === 'pagamentos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Pagamentos ({obra.pagamentos.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('fotos')}
-                className={`px-4 py-1.5 text-sm rounded-md font-medium transition-colors ${activeTab === 'fotos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Fotos ({fotos.length})
-              </button>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-1 flex-wrap">
+              {([
+                ['lancamentos', `Lançamentos (${obra.lancamentos.length})`],
+                ['pagamentos', `Pagamentos (${obra.pagamentos.length})`],
+                ['fotos', `Fotos (${fotos.length})`],
+                ['atividades', `Atividades (${atividades.length})`],
+              ] as const).map(([tab, label]) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-1.5 text-sm rounded-md font-medium transition-colors ${activeTab === tab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            {activeTab !== 'fotos' ? (
-              <Button
-                size="sm"
-                onClick={() => activeTab === 'lancamentos' ? (resetL({ tipo: 'saida', data: new Date().toISOString().split('T')[0], categoria: 'material' }), setModalLancamento(true)) : (resetP({ tipo: 'salario', data: new Date().toISOString().split('T')[0] }), setModalPagamento(true))}
-              >
-                <Plus size={14} /> Novo
-              </Button>
-            ) : (
+            {activeTab === 'fotos' ? (
               <label className="cursor-pointer">
                 <span className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors ${uploadingFoto ? 'opacity-60 pointer-events-none' : ''}`}>
                   <Camera size={14} /> {uploadingFoto ? 'Enviando...' : 'Adicionar Foto'}
                 </span>
                 <input type="file" accept="image/*" className="hidden" onChange={handleFotoUpload} disabled={uploadingFoto} />
               </label>
+            ) : activeTab === 'atividades' ? (
+              <Button size="sm" onClick={openNewAtividade}>
+                <Plus size={14} /> Nova Atividade
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => activeTab === 'lancamentos'
+                  ? (resetL({ tipo: 'saida', data: new Date().toISOString().split('T')[0], categoria: 'material' }), setModalLancamento(true))
+                  : (resetP({ tipo: 'salario', data: new Date().toISOString().split('T')[0] }), setModalPagamento(true))
+                }
+              >
+                <Plus size={14} /> Novo
+              </Button>
             )}
           </div>
         </CardHeader>
         <CardBody className="p-0">
+          {/* ── Lançamentos ── */}
           {activeTab === 'lancamentos' && (
             obra.lancamentos.length === 0 ? (
               <p className="text-center text-sm text-slate-400 py-8">Nenhum lançamento</p>
@@ -370,6 +397,8 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             )
           )}
+
+          {/* ── Pagamentos ── */}
           {activeTab === 'pagamentos' && (
             obra.pagamentos.length === 0 ? (
               <p className="text-center text-sm text-slate-400 py-8">Nenhum pagamento</p>
@@ -394,8 +423,9 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             )
           )}
+
+          {/* ── Fotos ── */}
           {activeTab === 'fotos' && (
-            /* Fotos */
             fotos.length === 0 ? (
               <div className="py-12 text-center text-slate-400">
                 <Camera className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -425,6 +455,61 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             )
           )}
+
+          {/* ── Atividades ── */}
+          {activeTab === 'atividades' && (
+            loadingAtiv ? (
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : atividades.length === 0 ? (
+              <div className="py-12 text-center text-slate-400">
+                <Activity className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>Nenhuma atividade cadastrada</p>
+                <p className="text-xs mt-1">Clique em "Nova Atividade" para começar</p>
+              </div>
+            ) : (
+              <div>
+                {/* Peso total summary */}
+                <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-4 text-sm">
+                  <span className="text-slate-500">{atividades.length} atividade(s)</span>
+                  <span className="text-slate-500">·</span>
+                  <span className="text-slate-500">Peso total: <strong className="text-slate-700">{pesoTotal}</strong></span>
+                  <span className="text-slate-400 text-xs">(usado para calcular evolução ponderada)</span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {atividades.map((a, idx) => (
+                    <div key={a.id} className="flex items-center gap-4 px-5 py-3 hover:bg-slate-50 group">
+                      <GripVertical size={14} className="text-slate-300 flex-shrink-0" />
+                      <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-xs font-bold text-orange-600 flex-shrink-0">
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-slate-800">{a.nome}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PESO_COLOR[a.peso]}`}>
+                            Peso {a.peso} — {PESO_LABEL[a.peso]}
+                          </span>
+                          {a.unidade && (
+                            <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{a.unidade}</span>
+                          )}
+                        </div>
+                        {a.descricao && <p className="text-xs text-slate-400 mt-0.5 truncate">{a.descricao}</p>}
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => openEditAtividade(a)} className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+                          <Pencil size={13} />
+                        </button>
+                        <button onClick={() => deleteAtividade(a.id)} className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-500">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          )}
         </CardBody>
       </Card>
 
@@ -447,11 +532,7 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
             <Input label="Valor (R$) *" type="number" step="0.01" {...regL('valor', { required: true })} placeholder="0,00" />
             <Input label="Data *" type="date" {...regL('data', { required: true })} />
           </div>
-          <Select
-            label="Categoria *"
-            options={CATEGORIAS_LANCAMENTO}
-            {...regL('categoria', { required: true })}
-          />
+          <Select label="Categoria *" options={CATEGORIAS_LANCAMENTO} {...regL('categoria', { required: true })} />
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="secondary" onClick={() => setModalLancamento(false)}>Cancelar</Button>
             <Button type="submit" loading={saving}>Salvar</Button>
@@ -476,6 +557,23 @@ export default function ObraDetailPage({ params }: { params: Promise<{ id: strin
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="secondary" onClick={() => setModalPagamento(false)}>Cancelar</Button>
             <Button type="submit" loading={saving} disabled={funcOptions.length === 0}>Salvar</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Atividade */}
+      <Modal isOpen={modalAtividade} onClose={() => { setModalAtividade(false); setEditAtividade(null) }} title={editAtividade ? 'Editar Atividade' : 'Nova Atividade'}>
+        <form onSubmit={handleA(submitAtividade)} className="space-y-4">
+          <Input label="Nome da Atividade *" {...regA('nome', { required: true })} placeholder="Ex: Fundação, Alvenaria, Cobertura..." />
+          <Input label="Descrição" {...regA('descricao')} placeholder="Opcional — detalhamento da atividade" />
+          <Select label="Peso *" options={PESOS} {...regA('peso', { required: true })} />
+          <Input label="Unidade de Medida" {...regA('unidade')} placeholder="Ex: m², m³, un (opcional)" />
+          <p className="text-xs text-slate-400">
+            O peso é usado para calcular a evolução ponderada no Controle de Atividades semanal.
+          </p>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={() => { setModalAtividade(false); setEditAtividade(null) }}>Cancelar</Button>
+            <Button type="submit" loading={savingAtiv}>Salvar</Button>
           </div>
         </form>
       </Modal>

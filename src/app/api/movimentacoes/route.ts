@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
       quantidade: Number(body.quantidade),
       data: new Date(body.data),
       observacao: body.observacao || null,
+      responsavelNome: body.responsavelNome || null,
       registradoPorId: session.userId,
     },
     include: {

@@ -30,6 +30,7 @@ model Obra {
   pontos            RegistroPonto[]
   movOrigem         MovimentacaoMaterial[] @relation("MovOrigem")
   movDestino        MovimentacaoMaterial[] @relation("MovDestino")
+  atividades        AtividadeObra[]
 }
 
 model Funcionario {
@@ -114,6 +115,8 @@ model User {
   fotosObra             FotoObra[]
   pontosRegistrados     RegistroPonto[]
   movimentacoes         MovimentacaoMaterial[]
+  pushTokens            PushToken[]
+  registrosAtividade    RegistroAtividade[]
 }
 
 model Grupo {
@@ -179,7 +182,7 @@ model FotoObra {
   id           String   @id @default(cuid())
   obraId       String
   userId       String
-  imagemPath   String   // URL relativa: /uploads/obras/[obraId]/[filename]
+  imagemPath   String
   descricao    String?
   dataRegistro DateTime
   createdAt    DateTime @default(now())
@@ -199,6 +202,7 @@ model RegistroPonto {
   registradoPorId String
   observacao      String?
   status          String   @default("em_aberto")
+  alertaImpar     Boolean  @default(false)
   createdAt       DateTime @default(now())
 
   funcionario   Funcionario @relation(fields: [funcionarioId], references: [id])
@@ -225,18 +229,65 @@ model Material {
 }
 
 model MovimentacaoMaterial {
-  id              String   @id @default(cuid())
-  materialId      String
-  obraOrigemId    String?  // null = depósito
-  obraDestinoId   String?  // null = depósito
-  quantidade      Int      @default(1)
-  data            DateTime
-  observacao      String?
-  registradoPorId String
-  createdAt       DateTime @default(now())
+  id               String   @id @default(cuid())
+  materialId       String
+  obraOrigemId     String?
+  obraDestinoId    String?
+  quantidade       Int      @default(1)
+  data             DateTime
+  observacao       String?
+  responsavelNome  String?
+  registradoPorId  String
+  createdAt        DateTime @default(now())
 
   material      Material @relation(fields: [materialId], references: [id])
   obraOrigem    Obra?    @relation("MovOrigem", fields: [obraOrigemId], references: [id])
   obraDestino   Obra?    @relation("MovDestino", fields: [obraDestinoId], references: [id])
   registradoPor User     @relation(fields: [registradoPorId], references: [id])
+}
+
+// ─── Push Notifications ───────────────────────────────────────────────────────
+
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  platform  String?
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Atividades da Obra ───────────────────────────────────────────────────────
+
+model AtividadeObra {
+  id        String   @id @default(cuid())
+  obraId    String
+  nome      String
+  descricao String?
+  peso      Int      @default(1) // 1, 2 ou 3
+  unidade   String?
+  ordem     Int      @default(0)
+  status    String   @default("ativa")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  obra      Obra                @relation(fields: [obraId], references: [id], onDelete: Cascade)
+  registros RegistroAtividade[]
+}
+
+model RegistroAtividade {
+  id                  String   @id @default(cuid())
+  atividadeObraId     String
+  semana              String   // formato "YYYY-Www" ex: "2026-W01"
+  percentualPlanejado Float    @default(0)
+  percentualExecutado Float    @default(0)
+  observacao          String?
+  registradoPorId     String
+  createdAt           DateTime @default(now())
+
+  atividade     AtividadeObra @relation(fields: [atividadeObraId], references: [id], onDelete: Cascade)
+  registradoPor User          @relation(fields: [registradoPorId], references: [id])
+
+  @@unique([atividadeObraId, semana])
 }

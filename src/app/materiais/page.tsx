@@ -25,6 +25,7 @@ interface Movimentacao {
   quantidade: number
   data: string
   observacao: string | null
+  responsavelNome: string | null
   obraOrigem: { id?: string; nome: string } | null
   obraDestino: { id?: string; nome: string } | null
   registradoPor: { name: string }
@@ -387,6 +388,11 @@ export default function MateriaisPage() {
               <input type="date" className="w-full border border-slate-200 rounded-lg px-3 py-2"
                 {...formMov.register('data', { required: true })} />
             </div>
+          </div>
+          <div>
+            <label className="text-sm font-semibold text-slate-700 mb-1 block">Responsável pela Movimentação</label>
+            <input type="text" placeholder="Nome do responsável (opcional)" className="w-full border border-slate-200 rounded-lg px-3 py-2"
+              {...formMov.register('responsavelNome')} />
           </div>
           <div>
             <label className="text-sm font-semibold text-slate-700 mb-1 block">Observação</label>
