@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { StatusBar } from 'expo-status-bar'
+import Constants from 'expo-constants'
 import { getStoredUser, SessionUser } from './src/lib/auth'
-import * as Notifications from 'expo-notifications'
 
 import LoginScreen from './src/screens/LoginScreen'
 import HomeScreen from './src/screens/HomeScreen'
@@ -15,6 +15,7 @@ import AlmoxarifadoScreen from './src/screens/AlmoxarifadoScreen'
 import FotoObraScreen from './src/screens/FotoObraScreen'
 
 const Stack = createNativeStackNavigator()
+const isExpoGo = Constants.appOwnership === 'expo'
 
 export default function App() {
   const [user, setUser] = useState<SessionUser | null>(null)
@@ -28,15 +29,27 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
-      console.log('Notification received:', notification)
-    })
-    responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as any
-      if (data?.type === 'ponto_impar' && navigationRef.current) {
-        navigationRef.current.navigate('Ponto')
+    if (isExpoGo) return // push não disponível no Expo Go (SDK 53+)
+
+    const setupListeners = async () => {
+      try {
+        const Notifications = await import('expo-notifications')
+        notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
+          console.log('Notification received:', notification)
+        })
+        responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
+          const data = response.notification.request.content.data as any
+          if (data?.type === 'ponto_impar' && navigationRef.current) {
+            navigationRef.current.navigate('Ponto')
+          }
+        })
+      } catch {
+        // silently ignore if notifications unavailable
       }
-    })
+    }
+
+    setupListeners()
+
     return () => {
       notificationListener.current?.remove()
       responseListener.current?.remove()
