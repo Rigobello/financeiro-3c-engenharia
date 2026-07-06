@@ -10,6 +10,7 @@
       "supportsTablet": true
     },
     "android": {
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#F97316",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -19,8 +20,10 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
-      ]
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "Engenharia3C.Financeiro"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -39,6 +42,11 @@
         }
       ],
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d0890cd0-c1f0-4f36-827b-b7fe25aaa848"
+      }
+    }
   }
 }
