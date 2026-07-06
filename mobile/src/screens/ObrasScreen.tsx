@@ -104,7 +104,8 @@ export default function ObrasScreen({ navigation, user }: Props) {
             </View>
           )}
           {obrasFiltradas.map((obra) => (
-            <View key={obra.id} style={s.card}>
+            <TouchableOpacity key={obra.id} style={s.card} activeOpacity={0.85}
+              onPress={() => navigation.navigate('ObraDetail', { obraId: obra.id })}>
               <View style={s.cardTop}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.obraNome}>{obra.nome}</Text>
@@ -147,7 +148,7 @@ export default function ObrasScreen({ navigation, user }: Props) {
                   <Text style={s.counter}>📄 {obra._count.lancamentos}</Text>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
       )}

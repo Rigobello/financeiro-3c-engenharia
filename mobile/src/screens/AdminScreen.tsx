@@ -33,6 +33,9 @@ const NAV_ITEMS = [
   { id: 'funcionarios', icon: '👷', label: 'Funcionários', sub: 'Equipe e cargos', screen: 'Funcionarios', color: '#475569' },
   { id: 'foto', icon: '📸', label: 'Fotos da Obra', sub: 'Registro fotográfico', screen: 'FotoObra', color: '#8b5cf6' },
   { id: 'ocr', icon: '📄', label: 'Envio de Recibos', sub: 'OCR de notas fiscais', screen: 'User', color: '#64748b' },
+  { id: 'pagamentos', icon: '💸', label: 'Pagamentos', sub: 'Histórico de pagamentos a funcionários', screen: 'Pagamentos', color: '#8b5cf6' },
+  { id: 'solicitacoes', icon: '💰', label: 'Adiantamentos', sub: 'Solicitações e aprovações', screen: 'Solicitacoes', color: '#3b82f6' },
+  { id: 'caixa', icon: '💵', label: 'Caixa', sub: 'Fluxo de receitas e despesas', screen: 'Caixa', color: '#22c55e' },
 ]
 
 const fmt = (v: number) =>

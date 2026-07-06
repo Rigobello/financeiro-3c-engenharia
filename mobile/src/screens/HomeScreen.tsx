@@ -30,8 +30,11 @@ const TILES: Tile[] = [
   { id: 'consolidado', label: 'Consolidado', sub: 'Visão geral do sistema', icon: '📊', screen: 'Consolidado', color: '#fff', bg: '#3D4D80', grupos: ['Administrador', 'Engenheiro'] },
   { id: 'atividades', label: 'Atividades', sub: 'Controle semanal', icon: '📋', screen: 'ControleAtividades', color: '#1e293b', bg: '#e0f9f8', grupos: ['Administrador', 'Engenheiro'] },
   { id: 'funcionarios', label: 'Funcionários', sub: 'Equipe e cargos', icon: '👷', screen: 'Funcionarios', color: '#1e293b', bg: '#f1f5f9', grupos: ['Administrador'] },
-  // Engineer / Admin
-  { id: 'engineer', label: 'Adiantamentos', sub: 'Autorizar solicitações', icon: '💰', screen: 'Engineer', color: '#1e293b', bg: '#dbeafe', grupos: ['Engenheiro', 'Administrador'] },
+  // Adiantamentos — todos os usuários podem criar, admins/engenheiros aprovam
+  { id: 'solicitacoes', label: 'Adiantamentos', sub: 'Solicitar ou aprovar', icon: '💰', screen: 'Solicitacoes', color: '#1e293b', bg: '#dbeafe', grupos: ['Usuário', 'Ponto', 'Almoxarifado', 'Administrador', 'Engenheiro'] },
+  // Pagamentos e Caixa — admin/engenheiro
+  { id: 'pagamentos', label: 'Pagamentos', sub: 'Histórico de pagamentos', icon: '💸', screen: 'Pagamentos', color: '#fff', bg: '#8b5cf6', grupos: ['Administrador', 'Engenheiro'] },
+  { id: 'caixa', label: 'Caixa', sub: 'Receitas e despesas', icon: '💵', screen: 'Caixa', color: '#fff', bg: '#16a34a', grupos: ['Administrador'] },
   // Ponto
   { id: 'ponto', label: 'Registro de Ponto', sub: 'Entrada e saída', icon: '⏰', screen: 'Ponto', color: '#fff', bg: '#22c55e', grupos: ['Ponto', 'Administrador'] },
   // Almoxarifado
@@ -85,7 +88,6 @@ export default function HomeScreen({ navigation, user, onLogout }: Props) {
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Olá, {user.name.split(' ')[0]}</Text>
-          <Text style={styles.grupos}>{user.grupos.join(' · ')}</Text>
         </View>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
           <Text style={styles.logoutText}>Sair</Text>

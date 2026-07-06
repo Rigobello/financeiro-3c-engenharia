@@ -16,6 +16,10 @@ import ObrasScreen from './src/screens/ObrasScreen'
 import ConsolidadoScreen from './src/screens/ConsolidadoScreen'
 import ControleAtividadesScreen from './src/screens/ControleAtividadesScreen'
 import FuncionariosScreen from './src/screens/FuncionariosScreen'
+import ObraDetailScreen from './src/screens/ObraDetailScreen'
+import PagamentosScreen from './src/screens/PagamentosScreen'
+import SolicitacoesScreen from './src/screens/SolicitacoesScreen'
+import CaixaScreen from './src/screens/CaixaScreen'
 
 const Stack = createNativeStackNavigator()
 
@@ -95,6 +99,18 @@ export default function App() {
         </Stack.Screen>
         <Stack.Screen name="Funcionarios">
           {(props) => <FuncionariosScreen {...props} user={user!} onLogout={() => setUser(null)} />}
+        </Stack.Screen>
+        <Stack.Screen name="ObraDetail">
+          {(props) => <ObraDetailScreen {...props} user={user!} onLogout={() => setUser(null)} />}
+        </Stack.Screen>
+        <Stack.Screen name="Pagamentos">
+          {(props) => <PagamentosScreen {...props} user={user!} onLogout={() => setUser(null)} />}
+        </Stack.Screen>
+        <Stack.Screen name="Solicitacoes">
+          {(props) => <SolicitacoesScreen {...props} user={user!} onLogout={() => setUser(null)} />}
+        </Stack.Screen>
+        <Stack.Screen name="Caixa">
+          {(props) => <CaixaScreen {...props} user={user!} onLogout={() => setUser(null)} />}
         </Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>

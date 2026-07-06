@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
-  ScrollView, ActivityIndicator, RefreshControl,
+  ScrollView, ActivityIndicator, RefreshControl, TextInput, Alert,
 } from 'react-native'
 import { api } from '../lib/api'
 import { SessionUser } from '../lib/auth'
@@ -49,16 +49,16 @@ function shiftWeek(isoWeek: string, delta: number): string {
   return getISOWeek(start)
 }
 
-function fmtWeekLabel(semana: string, inicio: string, fim: string): string {
+function fmtWeekLabel(inicio: string, fim: string): string {
   const s = new Date(inicio + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
   const e = new Date(fim + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-  return `${semana} (${s} – ${e})`
+  return `${s} – ${e}`
 }
 
 function ProgressBar({ value, color = '#5165A8' }: { value: number; color?: string }) {
   return (
     <View style={pb.track}>
-      <View style={[pb.fill, { width: `${Math.min(100, value)}%`, backgroundColor: color }]} />
+      <View style={[pb.fill, { width: `${Math.min(100, Math.max(0, value))}%`, backgroundColor: color }]} />
     </View>
   )
 }
@@ -68,34 +68,80 @@ const pb = StyleSheet.create({
   fill: { height: '100%', borderRadius: 3 },
 })
 
+function PesoBadge({ peso }: { peso: number }) {
+  const colors = ['', '#f1f5f9', '#d5f5f4', '#fed7aa'] // 0, 1, 2, 3
+  const textColors = ['', '#64748b', '#0f766e', '#c2410c']
+  return (
+    <View style={[badge.b, { backgroundColor: colors[peso] || '#f1f5f9' }]}>
+      <Text style={[badge.t, { color: textColors[peso] || '#64748b' }]}>{peso}</Text>
+    </View>
+  )
+}
+
+const badge = StyleSheet.create({
+  b: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  t: { fontSize: 12, fontWeight: '800' },
+})
+
 export default function ControleAtividadesScreen({ navigation, user }: Props) {
-  const [semana, setSemana] = useState(getISOWeek(new Date()))
+  const currentWeek = getISOWeek(new Date())
+  const [semana, setSemana] = useState(currentWeek)
   const [data, setData] = useState<ObraControle[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [periodoLabel, setPeriodoLabel] = useState('')
+  const [edits, setEdits] = useState<Record<string, { planejado: string; executado: string; observacao: string }>>({})
+  const [saving, setSaving] = useState<Record<string, boolean>>({})
 
   const load = useCallback(async (sem: string) => {
     try {
       const res = await api.get<ObraControle[]>(`/controle-atividades?semana=${sem}`)
       setData(res)
       if (res.length > 0) {
-        setPeriodoLabel(fmtWeekLabel(res[0].semana, res[0].periodoInicio, res[0].periodoFim))
+        setPeriodoLabel(fmtWeekLabel(res[0].periodoInicio, res[0].periodoFim))
       }
-    } catch {
-      // silent
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
+      // Seed edits from existing data
+      const initial: typeof edits = {}
+      res.forEach((o) => o.atividades.forEach((a) => {
+        initial[a.id] = {
+          planejado: a.percentualPlanejadoSemana > 0 ? String(a.percentualPlanejadoSemana) : '',
+          executado: a.percentualExecutadoSemana > 0 ? String(a.percentualExecutadoSemana) : '',
+          observacao: a.observacao ?? '',
+        }
+      }))
+      setEdits(initial)
+    } catch { }
+    finally { setLoading(false); setRefreshing(false) }
   }, [])
 
   useEffect(() => { load(semana) }, [semana])
 
   const goWeek = (delta: number) => {
     setLoading(true)
-    const next = shiftWeek(semana, delta)
-    setSemana(next)
+    setSemana((prev) => shiftWeek(prev, delta))
+  }
+
+  const isCurrentWeek = semana === currentWeek
+
+  const handleEdit = (atId: string, field: 'planejado' | 'executado' | 'observacao', val: string) => {
+    setEdits((prev) => ({ ...prev, [atId]: { ...prev[atId], [field]: val } }))
+  }
+
+  const saveAtividade = async (at: Atividade) => {
+    const e = edits[at.id]
+    if (!e) return
+    setSaving((p) => ({ ...p, [at.id]: true }))
+    try {
+      await api.post('/registros-atividades', {
+        atividadeObraId: at.id,
+        semana,
+        percentualPlanejado: parseFloat(e.planejado) || 0,
+        percentualExecutado: parseFloat(e.executado) || 0,
+        observacao: e.observacao || null,
+      })
+      load(semana)
+    } catch (err: any) { Alert.alert('Erro', err.message) }
+    finally { setSaving((p) => ({ ...p, [at.id]: false })) }
   }
 
   return (
@@ -106,7 +152,7 @@ export default function ControleAtividadesScreen({ navigation, user }: Props) {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>Controle de Atividades</Text>
-          <Text style={s.headerSub}>{data.length} obras</Text>
+          <Text style={s.headerSub}>{data.length} obra(s)</Text>
         </View>
       </View>
 
@@ -116,13 +162,13 @@ export default function ControleAtividadesScreen({ navigation, user }: Props) {
           <Text style={s.weekArrowText}>◀</Text>
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={s.weekLabel}>{semana}</Text>
-          {periodoLabel ? <Text style={s.weekPeriodo}>{periodoLabel.split('(')[1]?.replace(')', '') ?? ''}</Text> : null}
+          <Text style={s.weekLabel}>{semana}{isCurrentWeek ? ' (atual)' : ''}</Text>
+          {periodoLabel ? <Text style={s.weekPeriodo}>{periodoLabel}</Text> : null}
         </View>
         <TouchableOpacity onPress={() => goWeek(+1)} style={s.weekArrow}>
           <Text style={s.weekArrowText}>▶</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => { const w = getISOWeek(new Date()); setSemana(w); setLoading(true) }} style={s.weekToday}>
+        <TouchableOpacity onPress={() => { setSemana(currentWeek); setLoading(true) }} style={s.weekToday}>
           <Text style={s.weekTodayText}>Hoje</Text>
         </TouchableOpacity>
       </View>
@@ -142,7 +188,6 @@ export default function ControleAtividadesScreen({ navigation, user }: Props) {
           )}
           {data.map((item) => (
             <View key={item.obra.id} style={s.obraCard}>
-              {/* Obra header */}
               <View style={s.obraHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.obraNome}>{item.obra.nome}</Text>
@@ -156,41 +201,107 @@ export default function ControleAtividadesScreen({ navigation, user }: Props) {
                 </View>
               </View>
 
-              {/* Evolução total bar */}
               <View style={s.evolucaoBarRow}>
                 <ProgressBar value={item.evolucaoPonderada} color={item.evolucaoPonderada >= 70 ? '#22c55e' : '#5165A8'} />
               </View>
 
-              {/* Atividades */}
               {item.atividades.length === 0 ? (
                 <Text style={s.noAtiv}>Sem atividades cadastradas</Text>
               ) : (
                 <View style={s.atividades}>
-                  {/* Header row */}
-                  <View style={s.atHeader}>
-                    <Text style={[s.atCol, { flex: 2 }]}>Atividade</Text>
-                    <Text style={[s.atCol, { width: 50, textAlign: 'center' }]}>Ant.</Text>
-                    <Text style={[s.atCol, { width: 50, textAlign: 'center' }]}>Plan.</Text>
-                    <Text style={[s.atCol, { width: 50, textAlign: 'center' }]}>Exec.</Text>
-                    <Text style={[s.atCol, { width: 55, textAlign: 'center' }]}>Acum.</Text>
-                  </View>
-                  {item.atividades.map((at) => (
-                    <View key={at.id} style={s.atRow}>
-                      <View style={{ flex: 2 }}>
-                        <Text style={s.atNome} numberOfLines={1}>{at.nome}</Text>
-                        {at.observacao ? (
-                          <Text style={s.atObs} numberOfLines={1}>{at.observacao}</Text>
-                        ) : null}
-                        <ProgressBar value={at.percentualAcumuladoAtual} />
+                  {item.atividades.map((at) => {
+                    const e = edits[at.id] ?? { planejado: '', executado: '', observacao: '' }
+                    const execVal = parseFloat(e.executado) || at.percentualExecutadoSemana
+                    const planVal = parseFloat(e.planejado) || at.percentualPlanejadoSemana
+                    const acumFill = at.percentualAcumuladoAtual
+                    const isSaving = saving[at.id]
+                    return (
+                      <View key={at.id} style={s.atCard}>
+                        {/* Top: nome + peso */}
+                        <View style={s.atTop}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.atNome}>{at.nome}</Text>
+                            {at.descricao && <Text style={s.atDesc} numberOfLines={1}>{at.descricao}</Text>}
+                            {at.unidade && <Text style={s.atUnit}>({at.unidade})</Text>}
+                          </View>
+                          <PesoBadge peso={at.peso} />
+                        </View>
+
+                        {/* Percentual bars (read-only for non-current weeks) */}
+                        {isCurrentWeek ? (
+                          <View style={s.editRow}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={s.editLabel}>Planejado %</Text>
+                              <TextInput
+                                style={s.editInput}
+                                value={e.planejado}
+                                onChangeText={(v) => handleEdit(at.id, 'planejado', v)}
+                                keyboardType="decimal-pad"
+                                placeholder={String(at.percentualPlanejadoSemana || 0)}
+                              />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={s.editLabel}>Executado %</Text>
+                              <TextInput
+                                style={[s.editInput, { color: execVal >= planVal ? '#16a34a' : '#dc2626' }]}
+                                value={e.executado}
+                                onChangeText={(v) => handleEdit(at.id, 'executado', v)}
+                                keyboardType="decimal-pad"
+                                placeholder={String(at.percentualExecutadoSemana || 0)}
+                              />
+                            </View>
+                          </View>
+                        ) : (
+                          <View style={s.statsRow}>
+                            <View style={s.statPill}>
+                              <Text style={s.statPillLabel}>Ant.</Text>
+                              <Text style={s.statPillValue}>{at.percentualAcumuladoAnterior}%</Text>
+                            </View>
+                            <View style={s.statPill}>
+                              <Text style={s.statPillLabel}>Plan.</Text>
+                              <Text style={[s.statPillValue, { color: '#5165A8' }]}>{at.percentualPlanejadoSemana}%</Text>
+                            </View>
+                            <View style={s.statPill}>
+                              <Text style={s.statPillLabel}>Exec.</Text>
+                              <Text style={[s.statPillValue, { color: at.percentualExecutadoSemana >= at.percentualPlanejadoSemana ? '#22c55e' : '#f59e0b' }]}>
+                                {at.percentualExecutadoSemana}%
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+
+                        {/* Acumulado + progress bar */}
+                        <View style={s.acumRow}>
+                          <Text style={s.acumLabel}>Acumulado Atual</Text>
+                          <Text style={[s.acumValue, { color: acumFill >= 100 ? '#22c55e' : '#5165A8' }]}>{acumFill}%</Text>
+                        </View>
+                        <ProgressBar value={acumFill} color={acumFill >= 100 ? '#22c55e' : execVal >= planVal ? '#3BBDB8' : '#5165A8'} />
+
+                        {/* Observação + Save (current week only) */}
+                        {isCurrentWeek && (
+                          <>
+                            <TextInput
+                              style={s.obsInput}
+                              value={e.observacao}
+                              onChangeText={(v) => handleEdit(at.id, 'observacao', v)}
+                              placeholder="Observação (opcional)"
+                            />
+                            <TouchableOpacity
+                              style={[s.saveBtn, isSaving && s.saveBtnDisabled]}
+                              onPress={() => saveAtividade(at)}
+                              disabled={isSaving}>
+                              <Text style={s.saveBtnText}>{isSaving ? 'Salvando...' : '💾 Salvar'}</Text>
+                            </TouchableOpacity>
+                          </>
+                        )}
+
+                        {/* Obs (read-only) */}
+                        {!isCurrentWeek && at.observacao && (
+                          <Text style={s.obsReadonly}>{at.observacao}</Text>
+                        )}
                       </View>
-                      <Text style={s.atPct}>{at.percentualAcumuladoAnterior}%</Text>
-                      <Text style={[s.atPct, { color: '#5165A8' }]}>{at.percentualPlanejadoSemana}%</Text>
-                      <Text style={[s.atPct, { color: at.percentualExecutadoSemana >= at.percentualPlanejadoSemana ? '#22c55e' : '#f59e0b' }]}>
-                        {at.percentualExecutadoSemana}%
-                      </Text>
-                      <Text style={[s.atPct, { fontWeight: '800', color: '#1e293b' }]}>{at.percentualAcumuladoAtual}%</Text>
-                    </View>
-                  ))}
+                    )
+                  })}
                 </View>
               )}
             </View>
@@ -203,19 +314,12 @@ export default function ControleAtividadesScreen({ navigation, user }: Props) {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#0f172a',
-  },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#0f172a' },
   backBtn: { padding: 4 },
   backText: { color: '#fff', fontSize: 22 },
   headerTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
   headerSub: { color: '#94a3b8', fontSize: 12 },
-  weekNav: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 12, paddingVertical: 10,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9',
-  },
+  weekNav: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   weekArrow: { padding: 8 },
   weekArrowText: { color: '#5165A8', fontSize: 16, fontWeight: '700' },
   weekLabel: { fontSize: 14, fontWeight: '700', color: '#1e293b' },
@@ -227,10 +331,7 @@ const s = StyleSheet.create({
   empty: { alignItems: 'center', paddingVertical: 48 },
   emptyIcon: { fontSize: 40, marginBottom: 8 },
   emptyText: { color: '#94a3b8', fontSize: 14, textAlign: 'center' },
-  obraCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 16,
-    elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
-  },
+  obraCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, elevation: 2 },
   obraHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
   obraNome: { fontSize: 15, fontWeight: '800', color: '#1e293b' },
   obraCliente: { fontSize: 12, color: '#64748b' },
@@ -239,14 +340,25 @@ const s = StyleSheet.create({
   evolucaoValue: { fontSize: 20, fontWeight: '800' },
   evolucaoBarRow: { marginBottom: 12 },
   noAtiv: { color: '#94a3b8', fontSize: 13, fontStyle: 'italic' },
-  atividades: { gap: 8 },
-  atHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#f1f5f9',
-  },
-  atCol: { fontSize: 10, fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase' },
-  atRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#f8fafc' },
-  atNome: { fontSize: 13, fontWeight: '600', color: '#1e293b', marginBottom: 2 },
-  atObs: { fontSize: 11, color: '#94a3b8', fontStyle: 'italic', marginBottom: 2 },
-  atPct: { width: 50, textAlign: 'center', fontSize: 13, color: '#64748b', fontWeight: '600' },
+  atividades: { gap: 10 },
+  atCard: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e2e8f0' },
+  atTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
+  atNome: { fontSize: 13, fontWeight: '700', color: '#1e293b' },
+  atDesc: { fontSize: 11, color: '#94a3b8', marginTop: 1 },
+  atUnit: { fontSize: 11, color: '#64748b' },
+  editRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
+  editLabel: { fontSize: 11, fontWeight: '600', color: '#475569', marginBottom: 4 },
+  editInput: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, fontWeight: '700', color: '#1e293b', backgroundColor: '#fff' },
+  statsRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
+  statPill: { flex: 1, backgroundColor: '#fff', borderRadius: 8, padding: 6, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
+  statPillLabel: { fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 },
+  statPillValue: { fontSize: 13, fontWeight: '800', color: '#1e293b' },
+  acumRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  acumLabel: { fontSize: 11, color: '#64748b' },
+  acumValue: { fontSize: 13, fontWeight: '800' },
+  obsInput: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: '#1e293b', backgroundColor: '#fff', marginTop: 8 },
+  saveBtn: { backgroundColor: '#5165A8', borderRadius: 8, paddingVertical: 8, alignItems: 'center', marginTop: 8 },
+  saveBtnDisabled: { opacity: 0.6 },
+  saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  obsReadonly: { color: '#94a3b8', fontSize: 12, fontStyle: 'italic', marginTop: 4 },
 })
