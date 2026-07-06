@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Image,
 } from 'react-native'
 import { loginWithToken, SessionUser } from '../lib/auth'
 import { registerForPushNotifications, sendTokenToServer } from '../lib/notifications'
@@ -46,9 +46,11 @@ export default function LoginScreen({ navigation, onLogin }: Props) {
     >
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.logoBox}>
-          <Text style={styles.logoText}>3C</Text>
-        </View>
+        <Image
+          source={require('../../assets/Logo3C.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.title}>3C Engenharia</Text>
         <Text style={styles.subtitle}>Controle Financeiro</Text>
       </View>
@@ -101,7 +103,7 @@ export default function LoginScreen({ navigation, onLogin }: Props) {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.version}>v1.0.0</Text>
+      <Text style={styles.version}>v2.0.0</Text>
     </KeyboardAvoidingView>
   )
 }
@@ -115,13 +117,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   header: { alignItems: 'center', marginBottom: 32 },
-  logoBox: {
-    width: 72, height: 72, borderRadius: 20,
-    backgroundColor: '#5165A8',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 16,
-  },
-  logoText: { color: '#fff', fontSize: 28, fontWeight: '800' },
+  logo: { width: 100, height: 100, marginBottom: 16 },
   title: { color: '#fff', fontSize: 24, fontWeight: '700' },
   subtitle: { color: '#94a3b8', fontSize: 14, marginTop: 4 },
   card: {

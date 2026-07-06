@@ -12,6 +12,10 @@ import UserScreen from './src/screens/UserScreen'
 import PontoScreen from './src/screens/PontoScreen'
 import AlmoxarifadoScreen from './src/screens/AlmoxarifadoScreen'
 import FotoObraScreen from './src/screens/FotoObraScreen'
+import ObrasScreen from './src/screens/ObrasScreen'
+import ConsolidadoScreen from './src/screens/ConsolidadoScreen'
+import ControleAtividadesScreen from './src/screens/ControleAtividadesScreen'
+import FuncionariosScreen from './src/screens/FuncionariosScreen'
 
 const Stack = createNativeStackNavigator()
 
@@ -79,6 +83,18 @@ export default function App() {
         </Stack.Screen>
         <Stack.Screen name="FotoObra">
           {(props) => <FotoObraScreen {...props} user={user!} onLogout={() => setUser(null)} />}
+        </Stack.Screen>
+        <Stack.Screen name="Obras">
+          {(props) => <ObrasScreen {...props} user={user!} onLogout={() => setUser(null)} />}
+        </Stack.Screen>
+        <Stack.Screen name="Consolidado">
+          {(props) => <ConsolidadoScreen {...props} user={user!} onLogout={() => setUser(null)} />}
+        </Stack.Screen>
+        <Stack.Screen name="ControleAtividades">
+          {(props) => <ControleAtividadesScreen {...props} user={user!} onLogout={() => setUser(null)} />}
+        </Stack.Screen>
+        <Stack.Screen name="Funcionarios">
+          {(props) => <FuncionariosScreen {...props} user={user!} onLogout={() => setUser(null)} />}
         </Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>
