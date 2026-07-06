@@ -1,14 +1,10 @@
-import * as Notifications from 'expo-notifications'
-import * as Device from 'expo-device'
-import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 import { api } from './api'
 
-// Expo Go não suporta push remoto desde SDK 53
-const isExpoGo = Constants.appOwnership === 'expo'
-
-if (!isExpoGo) {
-  Notifications.setNotificationHandler({
+// Inicializa o handler de forma segura (falha silenciosa se não disponível)
+try {
+  const N = require('expo-notifications')
+  N.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
       shouldShowList: true,
@@ -16,31 +12,40 @@ if (!isExpoGo) {
       shouldSetBadge: true,
     }),
   })
+} catch {
+  // expo-notifications não disponível neste ambiente
 }
 
 export async function registerForPushNotifications(): Promise<string | null> {
-  if (isExpoGo || !Device.isDevice) return null
+  try {
+    const Device = require('expo-device')
+    if (!Device.isDevice) return null
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync()
-  let finalStatus = existingStatus
+    const N = require('expo-notifications')
 
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync()
-    finalStatus = status
+    const { status: existingStatus } = await N.getPermissionsAsync()
+    let finalStatus = existingStatus
+
+    if (existingStatus !== 'granted') {
+      const { status } = await N.requestPermissionsAsync()
+      finalStatus = status
+    }
+
+    if (finalStatus !== 'granted') return null
+
+    if (Platform.OS === 'android') {
+      await N.setNotificationChannelAsync('ponto', {
+        name: 'Alertas de Ponto',
+        importance: N.AndroidImportance.HIGH,
+        sound: 'default',
+      })
+    }
+
+    const token = (await N.getExpoPushTokenAsync()).data
+    return token
+  } catch {
+    return null
   }
-
-  if (finalStatus !== 'granted') return null
-
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('ponto', {
-      name: 'Alertas de Ponto',
-      importance: Notifications.AndroidImportance.HIGH,
-      sound: 'default',
-    })
-  }
-
-  const token = (await Notifications.getExpoPushTokenAsync()).data
-  return token
 }
 
 export async function sendTokenToServer(token: string): Promise<void> {
